@@ -1,0 +1,79 @@
+name: Build and Package Mutter
+
+on:
+  push:
+    branches:
+      - "main"
+    tags:
+      - "*"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Set up Docker container
+        uses: addnab/docker-run-action@v3
+        with:
+          image: debian:sid
+          options: -v ${{ github.workspace }}:/workspace
+          run: |
+            # Setup Debian source repositories
+            cat << END > /etc/apt/sources.list.d/debiansrc.sources
+            Types: deb-src
+            URIs: http://deb.debian.org/debian
+            Suites: sid
+            Components: main
+            Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+            END
+
+            # Update and install dependencies
+            apt update
+            apt install -y git ninja-build build-essential meson debhelper
+
+            # Change to workspace directory
+            cd /workspace
+
+            # Clone and prepare mutter
+            git clone https://github.com/GNOME/mutter
+            cd mutter
+            git revert cbdc3ae9 --no-commit
+
+            DIR="$(pwd)/subprojects"
+
+            # Use github mirror instead of gitlab because it's more reliable
+            find "$DIR" -type f -exec sed -i 's|gitlab.gnome.org|github.com|g' {} +
+
+            # Install build dependencies
+            apt build-dep -y mutter
+
+            # Build mutter
+            mkdir builddir
+            meson setup builddir
+            meson configure builddir --prefix=/usr
+            ninja -C builddir
+
+            # Create staging directory
+            mkdir -p debian_package
+            DESTDIR=$(pwd)/debian_package meson install -C builddir
+
+            # Create Debian package structure
+            mkdir -p debian_package/DEBIAN
+            cat <<EOF > debian_package/DEBIAN/control
+            Package: mutter
+            Version: 48.0
+            Architecture: amd64
+            Maintainer: GitHub Actions <no-reply@github.com>
+            Section: wayland
+            Priority: optional
+            Description: Custom-built GNOME Mutter window manager
+            EOF
+
+            # Build .deb package
+            dpkg-deb --build debian_package mutter-custom_48.0_amd64.deb
+
+      - name: Upload .deb Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mutter-deb-package
+          path: mutter/mutter-custom_48.0_amd64.deb
