@@ -83,4 +83,3 @@ jobs:
         with:
           artifacts: "mutter/mutter-custom_48.0_amd64.deb"
           tag: "v48.0"
-          releaseName: "48.0"
