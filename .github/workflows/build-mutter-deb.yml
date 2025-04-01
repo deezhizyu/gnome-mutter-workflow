@@ -77,9 +77,3 @@ jobs:
         with:
           name: mutter-deb-package
           path: mutter/mutter-custom_48.0_amd64.deb
-
-      - name: Upload .deb Package
-        uses: ncipollo/release-action@v1
-        with:
-          artifacts: "mutter/mutter-custom_48.0_amd64.deb"
-          tag: "v48.0"
